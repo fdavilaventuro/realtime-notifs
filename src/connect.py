@@ -1,4 +1,4 @@
-from utils import put_connection
+from src.utils import put_connection
 import json
 
 def handler(event, context):

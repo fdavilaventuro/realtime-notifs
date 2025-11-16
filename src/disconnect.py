@@ -1,4 +1,4 @@
-from utils import delete_connection
+from src.utils import delete_connection
 import json
 
 def handler(event, context):

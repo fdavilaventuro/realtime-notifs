@@ -1,7 +1,7 @@
 import os
 import json
 import boto3
-from utils import save_incident, publish_sns, list_connections, post_to_connection
+from src.utils import save_incident, publish_sns, list_connections, post_to_connection
 
 def handler(event, context):
     # event comes from WebSocket route - the body is the message
