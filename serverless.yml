@@ -1,0 +1,90 @@
+org: fabioedv
+service: alerta-utec-realtime
+
+provider:
+  name: aws
+  runtime: python3.13
+  region: us-east-1
+  stage: dev
+  memorySize: 1024
+  timeout: 20
+  iam:
+    role: arn:aws:iam::282163831899:role/LabRole
+  environment:
+    CONNECTIONS_TABLE: ${self:service}-Connections-${sls:stage}
+    INCIDENTS_TABLE: ${self:service}-Incidents-${sls:stage}
+    SNS_TOPIC_ARN: !Ref AlertaUTECAlertsTopic
+
+functions:
+  connect:
+    handler: src/connect.handler
+    events:
+      - websocket:
+          route: $connect
+
+  disconnect:
+    handler: src/disconnect.handler
+    events:
+      - websocket:
+          route: $disconnect
+
+  notify:
+    handler: src/notify_incident.handler
+    events:
+      - websocket:
+          route: notify
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    pythonBin: python3
+    zip: true
+    slim: true
+    strip: false
+    dockerizePip: false
+    layer: false
+
+resources:
+  Resources:
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CONNECTIONS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    IncidentsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.INCIDENTS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: incidentId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: incidentId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    AlertaUTECAlertsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: AlertaUTECAlerts-${sls:stage}
+
+  Outputs:
+    WebSocketEndpoint:
+      Value:
+        Fn::Join:
+          - ""
+          - - "wss://"
+            - Ref: WebsocketsApi
+            - ".execute-api."
+            - Ref: AWS::Region
+            - ".amazonaws.com/"
+            - ${sls:stage}
