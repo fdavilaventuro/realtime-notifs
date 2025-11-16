@@ -1,71 +1,85 @@
-import os
 import json
+import os
 import boto3
-from src.utils import save_incident, publish_sns, list_connections, post_to_connection
+
+from src.utils import (
+    save_incident,
+    publish_sns,
+    list_connections,
+    post_to_connection
+)
+
 
 def handler(event, context):
-    # event comes from WebSocket route - the body is the message
-    # event.requestContext.domainName and stage build endpoint
-    domain = event['requestContext']['domainName']
-    stage = event['requestContext']['stage']
-    api_endpoint = f"https://{domain}/{stage}"  # for apigatewaymanagementapi use https://{domain}/{stage}
-    # Note: boto3 apigatewaymanagementapi endpoint_url must be "https://{domain}/{stage}"
+    print("EVENT:", json.dumps(event))  # <--- LOG CRÍTICO
 
-    body = event.get('body')
-    if isinstance(body, str):
-        try:
+    domain = event["requestContext"]["domainName"]
+    stage = event["requestContext"]["stage"]
+    api_endpoint = f"https://{domain}/{stage}"
+
+    # Parsear payload
+    try:
+        body = event.get("body")
+        if isinstance(body, str):
             payload = json.loads(body)
-        except:
-            payload = {"raw": body}
-    else:
-        payload = body or {}
+        else:
+            payload = body or {}
+    except Exception as e:
+        print("ERROR PARSE BODY:", e)
+        return {"statusCode": 400, "body": "invalid body"}
 
-    # Expect payload.incident
+    # Validación
     incident = payload.get("incident")
     if not incident:
-        return {"statusCode": 400, "body": json.dumps({"message":"invalid payload, require 'incident'"})}
+        print("ERROR: no incident")
+        return {"statusCode": 400, "body": "invalid payload"}
 
-    # Ensure incidentId exists
+    # Agregar ID si falta
     if "incidentId" not in incident:
         import uuid
         incident["incidentId"] = str(uuid.uuid4())
 
-    save_incident(incident)
+    # Guardar en DynamoDB
+    try:
+        save_incident(incident)
+    except Exception as e:
+        print("ERROR SAVING INCIDENT:", e)
+        return {"statusCode": 500, "body": "db error"}
 
-    # Decide SNS publish based on urgency
+    # SNS (según urgencia)
     urgency = incident.get("urgency", "low").lower()
-    # Umbral: medium o high -> SNS
-    if urgency in ("medium","high"):
-        subject = f"[{urgency.upper()}] Incidente {incident.get('incidentId')}"
-        publish_sns(incident, subject=subject)
+    if urgency in ("medium", "high"):
+        try:
+            publish_sns(
+                incident,
+                subject=f"[{urgency.upper()}] Incidente {incident['incidentId']}",
+            )
+        except Exception as e:
+            print("ERROR SNS:", e)
 
-    # Broadcast to all connections
+    # Broadcast
     conns = list_connections()
     stale = []
-    broadcast_payload = {
-        "type": "incident_update",
-        "incident": incident
-    }
-    for connection_id in conns:
-        try:
-            ok = post_to_connection(api_endpoint, connection_id, broadcast_payload)
-            if ok is False:
-                stale.append(connection_id)
-        except Exception as e:
-            # If post fails with GoneException - mark stale
-            # but continue broadcasting
-            print(f"error posting to {connection_id}: {e}")
-            stale.append(connection_id)
 
-    # Clean stale connections
-    from utils import delete_connection
-    for s in stale:
+    for cid in conns:
         try:
-            delete_connection(s)
+            ok = post_to_connection(api_endpoint, cid, {
+                "type": "incident_update",
+                "incident": incident
+            })
+            if ok is False:
+                stale.append(cid)
+
+        except Exception as e:
+            print(f"ERROR broadcast to {cid}:", e)
+            stale.append(cid)
+
+    # Limpiar conexiones muertas
+    from src.utils import delete_connection
+    for cid in stale:
+        try:
+            delete_connection(cid)
         except:
             pass
 
-    return {
-        "statusCode": 200,
-        "body": json.dumps({"message": "broadcasted", "sent_to": len(conns) - len(stale)})
-    }
+    return {"statusCode": 200, "body": "OK"}
