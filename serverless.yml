@@ -34,6 +34,13 @@ functions:
       - websocket:
           route: notify
 
+  default:
+    handler: src/default.handler
+    events:
+      - websocket:
+          route: $default
+
+# ⚠️ Importante: NO usar plugins con v4
 custom:
   pythonRequirements:
     pythonBin: python3
@@ -43,6 +50,7 @@ custom:
 
 resources:
   Resources:
+
     ConnectionsTable:
       Type: AWS::DynamoDB::Table
       Properties:
