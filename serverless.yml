@@ -34,15 +34,11 @@ functions:
       - websocket:
           route: notify
 
-plugins:
-  - serverless-python-requirements
-
 custom:
   pythonRequirements:
-    pythonBin: python3
     zip: true
     slim: true
-    strip: false
+    uv: true   # usa uv (instalador ultrarrápido)
     dockerizePip: false
     layer: false
 

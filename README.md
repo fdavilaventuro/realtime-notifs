@@ -38,7 +38,7 @@ Este proyecto está configurado para que el despliegue sea **1 solo comando**.
 ### 1. Clonar el repo
 
 ```bash
-git clone <tu-repo>
+git clone https://github.com/fdavilaventuro/realtime-notifs
 cd realtime-notifs
 ```
 
