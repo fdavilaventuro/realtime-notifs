@@ -199,7 +199,8 @@ Almacena conectados vía WebSocket:
 
 Guarda incidentes enviados:
 
-| incidentId | type | location | urgency | timestamp | ... |
+| incidentId | type | location | urgency | timestamp |
+| ---------- | ---- | -------- | ------- | --------- |
 
 ---
 
@@ -215,16 +216,3 @@ Incluye:
 * `publish_sns()`
 
 Todo centralizado y limpio.
-
----
-
-## 🏁 Estado final
-
-✔ WebSocket funcionando
-✔ Broadcast multi-cliente
-✔ DynamoDB persistente
-✔ SNS notificaciones funcionales
-✔ Deploy con un solo comando
-✔ Import fix aplicado
-✔ Probado con Postman + wscat
-✔ Estructura limpia para mantenimiento
