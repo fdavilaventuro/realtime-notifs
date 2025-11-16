@@ -1,166 +1,230 @@
-# 🛰️ Alerta UTEC – Módulo de Tiempo Real & Notificaciones
+# 📘 **README — Alerta UTEC Realtime (Tiempo Real & Notificaciones)**
 
-**WebSocket API + DynamoDB + SNS + Lambdas (Serverless Framework)**
-Autor: *Persona C – Fabio Dávila*
+## 🚀 Descripción General
 
-Este módulo implementa la capa de **tiempo real** y **notificaciones** del sistema Alerta UTEC.
-Permite:
+Este módulo implementa la capa de **Tiempo Real y Notificaciones** para el sistema *Alerta UTEC*.
+Se encarga de:
 
-* Comunicación WebSocket en tiempo real.
-* Broadcast instantáneo de incidentes a todos los clientes conectados.
-* Gestión automática de conexiones (alta/baja).
-* Publicación de notificaciones vía SNS según nivel de urgencia.
-* Almacenamiento en DynamoDB.
+* WebSocket API para comunicación en tiempo real
+* Gestión automática de conexiones (connect / disconnect)
+* Envío de notificaciones broadcast a todos los clientes
+* Persistencia de incidentes en DynamoDB
+* Envío de alertas por **SNS** según urgencia
+* Lambda Functions serverless (Python 3.13)
+
+Este componente funciona de manera independiente y se integra sin fricción con frontend, backend, y pipelines (Airflow).
 
 ---
 
-# 📁 Estructura del Proyecto
+## 🏗 Arquitectura
+
+```
+Cliente Web
+     ▲
+     │ WebSocket (wss)
+     ▼
+Amazon API Gateway (WebSocket API)
+     ├── $connect       → Lambda connect.py
+     ├── $disconnect    → Lambda disconnect.py
+     ├── notify         → Lambda notify_incident.py
+     └── $default       → Lambda default.py
+     
+Lambdas acceden a:
+     ├── DynamoDB: Connections (connectionId por cliente)
+     ├── DynamoDB: Incidents (historial de incidentes)
+     └── SNS Topic: alerta-utec-realtime-alarms
+```
+
+---
+
+## 📁 Estructura del Proyecto
 
 ```
 realtime-notifs/
-├─ serverless.yml
-├─ requirements.txt
-├─ README.md
-├─ .gitignore
-└─ src/
-   ├─ utils.py
-   ├─ connect.py
-   ├─ disconnect.py
-   └─ notify_incident.py
+│
+├── serverless.yml
+├── requirements.txt
+├── README.md
+├── .gitignore
+│
+└── src/
+    ├── connect.py
+    ├── disconnect.py
+    ├── notify_incident.py
+    ├── default.py
+    └── utils.py
 ```
 
 ---
 
-# 🚀 Deploy (SUPER SIMPLE)
+## ⚡ Despliegue (solo dos comandos)
 
-Este proyecto está configurado para que el despliegue sea **1 solo comando**.
+Requisitos previos:
 
-### 1. Clonar el repo
+* Serverless Framework instalado
+* AWS CLI configurado
+* NodeJS 18+
+* Cuenta AWS con permisos
+
+### 1️⃣ Clonar el repositorio
 
 ```bash
-git clone https://github.com/fdavilaventuro/realtime-notifs
+git clone <este-repo>
 cd realtime-notifs
 ```
 
-### 2. Desplegar
+### 2️⃣ Deploy
 
 ```bash
 sls deploy
 ```
 
-¡Eso es todo!
-No necesitas:
+**Eso es todo.**
+Serverless empaqueta dependencias, crea tablas DynamoDB, tópico SNS, WebSocket API y Lambdas.
 
-* `pip install`
-* instalar requirements
-* usar Docker
-* crear recursos manualmente
+Tras desplegar, verás algo como:
 
-El `serverless.yml` se encarga de todo.
-
----
-
-# 🔧 ¿Qué recursos se crean automáticamente?
-
-## 🟢 **WebSocket API**
-
-Con rutas:
-
-| Ruta          | Lambda          | Descripción                                   |
-| ------------- | --------------- | --------------------------------------------- |
-| `$connect`    | connect         | Registra el connectionId del cliente          |
-| `$disconnect` | disconnect      | Lo elimina de DynamoDB                        |
-| `notify`      | notify_incident | Procesa incidentes entrantes y hace broadcast |
-
-## 🟢 **DynamoDB**
-
-Tablas autogeneradas:
-
-* **ConnectionsTable**
-  Guarda `connectionId` de WebSocket.
-
-* **IncidentsTable**
-  Guarda incidentes enviados por frontend o backends.
-
-## 🟢 **SNS Topic**
-
-* `AlertaUTECAlerts-dev`
-  Recibe notificaciones cuando un incidente tiene urgencia `medium` o `high`.
-
-## 🟢 **Lambdas**
-
-* `connect.py`
-* `disconnect.py`
-* `notify_incident.py`
-
-Las dependencias de Python (ej. `boto3`) se instalan automáticamente vía plugin.
+```
+endpoint: wss://xxxxxxx.execute-api.us-east-1.amazonaws.com/dev
+functions:
+  connect
+  disconnect
+  notify
+  default
+```
 
 ---
 
-# 📡 Comunicación WebSocket
+## 🧪 Pruebas
 
-## Enviar incidente (desde frontend / backend / wscat)
+### 1️⃣ Probar conexión WebSocket
+
+Puedes usar **Postman** o **wscat**.
+
+#### Conectar
+
+```
+wss://xxxxxxx.execute-api.us-east-1.amazonaws.com/dev
+```
+
+Si funciona, deberías ver:
+
+```
+Connected (101 Switching Protocols)
+```
+
+---
+
+### 2️⃣ Probar broadcast en tiempo real
+
+Abre **dos clientes WebSocket** (dos pestañas de Postman o Postman + wscat).
+
+Envía desde uno:
 
 ```json
 {
   "action": "notify",
   "incident": {
-    "type": "incendio",
-    "location": "Aula 101",
-    "description": "Humo detectado",
+    "type": "prueba",
+    "location": "Laboratorio A",
+    "description": "Mensaje de prueba en tiempo real",
     "urgency": "high",
     "status": "pendiente",
-    "timestamp": "2025-11-16T12:00:00Z"
+    "timestamp": "2025-11-16T18:12:00Z"
   }
 }
 ```
 
-## Recibido por **todos** los clientes conectados
+#### Resultado esperado:
+
+* **Ambos clientes** reciben:
 
 ```json
 {
   "type": "incident_update",
-  "incident": {...}
+  "incident": { ... }
 }
 ```
 
----
-
-# 📨 Notificaciones SNS
-
-El módulo publica automáticamente en SNS si:
-
-* `urgency = "medium"`
-* `urgency = "high"`
-
-Puedes suscribirte con:
-
-* Email
-* SMS
-* Otra Lambda
-* Slack/Discord vía webhook
-* Servicios externos
-
-Todo desde la consola de Amazon SNS.
+* DynamoDB registra el incidente
+* SNS envía un correo si urgencia = medium/high
 
 ---
 
-# 🔍 Logs y Debug
+## ✉️ Suscribirse a SNS por Email
 
-Ver logs en CloudWatch:
+1. Ir a **AWS SNS**
+2. Menú → Topics
+3. Abrir:
 
-* `/aws/lambda/alerta-utec-realtime-dev-connect`
-* `/aws/lambda/alerta-utec-realtime-dev-disconnect`
-* `/aws/lambda/alerta-utec-realtime-dev-notify`
+```
+alerta-utec-realtime-alarms
+```
+
+4. Click → **Create Subscription**
+5. Protocol: Email
+6. Endpoint: tu correo
+7. Confirmar desde el email recibido
+
+### Probar notificación medium
+
+```json
+{
+  "action": "notify",
+  "incident": {
+    "type": "temperatura elevada",
+    "location": "Laboratorio B",
+    "description": "Temperatura del servidor por encima de 70°C",
+    "urgency": "medium",
+    "status": "pendiente",
+    "timestamp": "2025-11-16T19:20:00Z"
+  }
+}
+```
+
+**Debes recibir un correo automático.**
 
 ---
 
-# ✔️ Estado del módulo
+## 🗄 Tablas DynamoDB creadas automáticamente
 
-Este servicio está listo para:
+### 1️⃣ Connections
 
-✅ recibir incidentes
-✅ hacer broadcast en tiempo real
-✅ almacenar información
-✅ generar notificaciones
-✅ funcionar solo con `git clone` + `sls deploy`
+Almacena conectados vía WebSocket:
+
+| connectionId | timestamp |
+| ------------ | --------- |
+
+### 2️⃣ Incidents
+
+Guarda incidentes enviados:
+
+| incidentId | type | location | urgency | timestamp | ... |
+
+---
+
+## 🧩 Utilidades (`utils.py`)
+
+Incluye:
+
+* `save_connection()`
+* `delete_connection()`
+* `list_connections()`
+* `post_to_connection()`
+* `save_incident()`
+* `publish_sns()`
+
+Todo centralizado y limpio.
+
+---
+
+## 🏁 Estado final
+
+✔ WebSocket funcionando
+✔ Broadcast multi-cliente
+✔ DynamoDB persistente
+✔ SNS notificaciones funcionales
+✔ Deploy con un solo comando
+✔ Import fix aplicado
+✔ Probado con Postman + wscat
+✔ Estructura limpia para mantenimiento
