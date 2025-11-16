@@ -36,11 +36,10 @@ functions:
 
 custom:
   pythonRequirements:
+    pythonBin: python3
     zip: true
     slim: true
-    uv: true   # usa uv (instalador ultrarrápido)
-    dockerizePip: false
-    layer: false
+    uv: true
 
 resources:
   Resources:
